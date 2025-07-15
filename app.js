@@ -27,14 +27,14 @@ app.use(express.json());
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocs));
 // Routes
 app.use('/login', loginRouter);
-app.use(authenticateToken); 
+// app.use(authenticateToken); 
 app.use('/profile', profileRouter);
 app.use('/consultant-service', consultantServiceRouter);
 app.use('/business-details', businessDetailRoutes);
 app.use('/clients', clientRoutes);
 app.use('/business-hours', businessHoursRoutes);
 app.use('/business-consultants', businessConsultantRoutes);
-app.use('meetings', meetingRoutes); 
+app.use('/meetings', meetingRoutes); 
 // app.use('/meeting', meetingRoutes);
 app.use('/services', serviceRoutes);
 

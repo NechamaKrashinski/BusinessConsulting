@@ -9,6 +9,9 @@ const {
 
 const createMeetingController = async (req, res) => {
     try {
+        console.log("Creating meeting with parameters:");
+        console.log("businessHourId:", req.body.businessHourId);
+        
         const meeting = await createMeeting(req.body.businessHourId, req.body.serviceId, req.body.clientId, req.body.date, req.body.startTime, req.body.endTime, req.body.notes);
         res.status(201).json(meeting);
     } catch (error) {

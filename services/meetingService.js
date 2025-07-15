@@ -1,9 +1,20 @@
 const { Meeting, Service, Client, BusinessHours, BusinessConsultant } = require('../models/associations.js');
-const { Op } = require('sequelize');
+const { Sequelize, Op } = require('sequelize');
 
 // פונקציות ניהול פגישות
 const createMeeting = async (businessHourId, serviceId, clientId, date, startTime, endTime, notes = '') => {
     // 1. בדיקות תקינות של הפרמטרים
+    console.log("Creating meeting with parameters:");
+
+    console.log("businessHourId:", businessHourId);
+    console.log("serviceId:", serviceId);
+    console.log("clientId:", clientId);
+    console.log("date:", date);
+    console.log("Type of date:", typeof date);
+    console.log("startTime:", startTime);
+    console.log("endTime:", endTime);
+    console.log("notes:", notes);
+
     if (!businessHourId || !date || !startTime || !endTime || !serviceId || !clientId) {
         throw new Error('All parameters are required.');
     }
@@ -13,12 +24,13 @@ const createMeeting = async (businessHourId, serviceId, clientId, date, startTim
     if (!serviceExists) {
         throw new Error('Service does not exist.');
     }
+    console.log("Service exists:", serviceExists);
     
     const client = await Client.findByPk(clientId);
     if (!client) {
         throw new Error('Client does not exist.');
     }
-
+    console.log("Client exists:", client);
     // 3. בדיקה האם שעת הפעילות קיימת
     const businessHour = await BusinessHours.findOne({
         where: { id: businessHourId },
@@ -27,6 +39,7 @@ const createMeeting = async (businessHourId, serviceId, clientId, date, startTim
     if (!businessHour) {
         throw new Error('Business Hour not found.');
     }
+    console.log("Business Hour exists:", businessHour);
     
     const { start_time: businessStartTime, end_time: businessEndTime } = businessHour;
     const consultantId = businessHour.business_consultant_id; // הנחה שהיועץ שמור בטבלה זו
@@ -39,18 +52,37 @@ const createMeeting = async (businessHourId, serviceId, clientId, date, startTim
     if (!businessConsultant) {
         throw new Error('Business Consultant not found.');
     }
-
+    
     // 5. קבלת זמני הפגישות הפנויים
-    const meetings = await getAvailableTimes([date], [consultantId]);
+    // const meetings = await getAvailableTimes([date], [consultantId]);
 
-    // 6. בדוק אם הזמן שביקש הלקוח פנוי
-    const isSlotAvailable = meetings.some(slot =>
-        slot.start_time <= startTime && slot.end_time >= endTime
+    // // 6. בדוק אם הזמן שביקש הלקוח פנוי
+    // const isSlotAvailable = meetings.some(slot =>
+    //     slot.start_time <= startTime && slot.end_time >= endTime
+    // );
+
+    const meetings = await getAvailableTimes([date], [consultantId]);
+    console.log("Available meetings for consultant:", meetings);
+    let isSlotAvailable = true;
+// בדוק אם meetings הוא אובייקט
+  let isSlotAvailable = true; // הנח שהזמן פנוי בהתחלה
+
+if (meetings && meetings[consultantId] && meetings[consultantId][date]) {
+    const availableSlots = meetings[consultantId][date];
+    isSlotAvailable = availableSlots.some(slot =>
+        (startTime < slot.end && endTime > slot.start)
     );
 
-    if (!isSlotAvailable) {
-        throw new Error('The selected time slot is not available.');
-    }
+    console.log("Is the requested time slot available?", isSlotAvailable);
+} else {
+    console.error("No available meetings found for the specified consultant and date:", meetings);
+    isSlotAvailable = false; // אם אין פגישות זמינות, הנח שהזמן לא פנוי
+}
+
+if (!isSlotAvailable) {
+    throw new Error('The selected time slot is not available.');
+}
+
 
     // 7. יצירת הפגישה
     const meeting = await Meeting.create({
@@ -110,42 +142,26 @@ const getConsultantsByService = async (serviceId) => {
     });
 };
 
-// const getBusinessHoursByConsultants = async (consultantIds) => {
-//     if (!Array.isArray(consultantIds) || consultantIds.length === 0) {
-//         throw new Error('Invalid input: consultantIds must be a non-empty array.');
-//     }
-
-//     const businessHours = await BusinessHours.findAll({
-//         where: {
-//             business_consultant_id: {
-//                 [Op.in]: consultantIds
-//             },
-//             date: { [Op.gte]: new Date() },
-//             is_active: true 
-//         },
-//         attributes: ['date', 'start_time', 'end_time'],
-//         raw: true 
-//     });
-
-//     const uniqueBusinessHours = [];
-//     const seenDates = new Set();
-
-//     businessHours.forEach(hour => {
-//         const dateKey = `${hour.date}-${hour.start_time}-${hour.end_time}`;
-//         if (!seenDates.has(dateKey)) {
-//             seenDates.add(dateKey);
-//             uniqueBusinessHours.push(hour);
-//         }
-//     });
-
-//     return uniqueBusinessHours;
-// };
-
-
 
 
 // פונקציות לקבלת שעות עסקים ופגישות
 const getBusinessHours = async (businessConsultantId, formattedDate) => {
+    console.log("Getting business hours for consultant ID:", businessConsultantId, "on date:", formattedDate);
+try {
+    const businessHours = await BusinessHours.findAll({
+        where:{
+            business_consultant_id: businessConsultantId,
+            date: formattedDate,
+            is_active: true
+        }
+    });
+    businessHours.forEach(hour => {
+        console.log(hour.toJSON()); // או hour.dataValues
+    });
+} catch (error) {
+    console.error('Error fetching business hours:', error);
+}
+
     return await BusinessHours.findAll({
         where: {
             business_consultant_id: businessConsultantId,
@@ -154,6 +170,7 @@ const getBusinessHours = async (businessConsultantId, formattedDate) => {
         }
     });
 };
+
 
 const getBookedMeetings = async (formattedDate, businessHours) => {
     return await Meeting.findAll({
@@ -165,13 +182,50 @@ const getBookedMeetings = async (formattedDate, businessHours) => {
     });
 };
 
+// const calculateAvailableTimes = (businessHours, bookedTimes) => {
+//     const availableTimes = [];
+//     console.log("Calculating available times based on business hours and booked times");
+//     log("Business hours:", businessHours);
+//     log("Booked times:", bookedTimes);
+//     businessHours.forEach(hour => {
+//         let currentStart = hour.start_time;
+//         console.log(`Processing business hour: ${hour.start_time} to ${hour.end_time}`);
+//         bookedTimes.forEach(booked => {
+//             if (booked.start >= hour.end_time) break;
+
+//             if (booked.start > currentStart) {
+//                 availableTimes.push({
+//                     start: currentStart,
+//                     end: booked.start
+//                 });
+//             }
+
+//             currentStart = Math.max(currentStart, booked.end);
+//         });
+
+//         if (currentStart < hour.end_time) {
+//             availableTimes.push({
+//                 start: currentStart,
+//                 end: hour.end_time
+//             });
+//         }
+//     });
+
+//     return availableTimes.filter(time => time.start < time.end);
+// };
+
 const calculateAvailableTimes = (businessHours, bookedTimes) => {
     const availableTimes = [];
+    console.log("Calculating available times based on business hours and booked times");
+    console.log("Business hours:", businessHours);
+    console.log("Booked times:", bookedTimes);
     businessHours.forEach(hour => {
         let currentStart = hour.start_time;
-
-        bookedTimes.forEach(booked => {
-            if (booked.start >= hour.end_time) return;
+        console.log(`Processing business hour: ${hour.start_time} to ${hour.end_time}`);
+        
+        for (let i = 0; i < bookedTimes.length; i++) {
+            const booked = bookedTimes[i];
+            if (booked.start >= hour.end_time) break;
 
             if (booked.start > currentStart) {
                 availableTimes.push({
@@ -181,7 +235,7 @@ const calculateAvailableTimes = (businessHours, bookedTimes) => {
             }
 
             currentStart = Math.max(currentStart, booked.end);
-        });
+        }
 
         if (currentStart < hour.end_time) {
             availableTimes.push({
@@ -194,7 +248,10 @@ const calculateAvailableTimes = (businessHours, bookedTimes) => {
     return availableTimes.filter(time => time.start < time.end);
 };
 
+
 const getAvailableTimes = async (dates, businessConsultantIds) => {
+    console.log("Getting available times for dates:", dates, "and businessConsultantIds:", businessConsultantIds);
+    
     if (!dates || !businessConsultantIds || !Array.isArray(dates) || !Array.isArray(businessConsultantIds)) {
         throw new Error('Invalid input: dates and businessConsultantIds must be non-null arrays');
     }
@@ -205,21 +262,30 @@ const getAvailableTimes = async (dates, businessConsultantIds) => {
         availableTimesByConsultant[businessConsultantId] = {};
 
         for (const date of dates) {
-            const formattedDate = new Date(date).toISOString().split('T')[0];
+            const dateObject = new Date(date);
+            const formattedDate = dateObject.toISOString();
+            console.log(`Processing date: ${formattedDate} for consultant ID: ${businessConsultantId} type of date: ${typeof formattedDate}`);
             const businessHours = await getBusinessHours(businessConsultantId, formattedDate);
+            console.log(`Business hours for ${formattedDate}:`, businessHours);
             const bookedMeetings = await getBookedMeetings(formattedDate, businessHours);
+            console.log(`Booked meetings for ${formattedDate}:`, bookedMeetings);
             const bookedTimes = bookedMeetings.map(meeting => ({
                 start: meeting.start_time,
                 end: meeting.end_time
             }));
-
+            console.log(`Booked times for ${formattedDate}:`, bookedTimes);
             const availableTimes = calculateAvailableTimes(businessHours, bookedTimes);
+            console.log(`Available times for ${formattedDate}:`, availableTimes);
             availableTimesByConsultant[businessConsultantId][formattedDate] = availableTimes;
+
         }
     }
 
     return availableTimesByConsultant;
 };
+
+
+
 
 module.exports = {
     createMeeting,
