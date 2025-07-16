@@ -63,15 +63,60 @@ const createMeeting = async (businessHourId, serviceId, clientId, date, startTim
 
     const meetings = await getAvailableTimes([date], [consultantId]);
     console.log("Available meetings for consultant:", meetings);
-    let isSlotAvailable = true;
+    
 // בדוק אם meetings הוא אובייקט
   let isSlotAvailable = true; // הנח שהזמן פנוי בהתחלה
 
-if (meetings && meetings[consultantId] && meetings[consultantId][date]) {
+// if (meetings && meetings[consultantId] && meetings[consultantId][date]) {
+//     const availableSlots = meetings[consultantId][date];
+//     isSlotAvailable = availableSlots.every(slot =>
+//     (endTime <= slot.start || startTime >= slot.end));
+
+
+//     console.log("Is the requested time slot available?", isSlotAvailable);
+// } else {
+//     console.error("No available meetings found for the specified consultant and date:", meetings);
+//     isSlotAvailable = false; // אם אין פגישות זמינות, הנח שהזמן לא פנוי
+// }
+if (!meetings) {
+    console.error("Meetings object is undefined or null.");
+    isSlotAvailable = false;
+    console.log("isSlotAvailable:", isSlotAvailable);
+}
+
+if (!meetings[consultantId]) {
+    console.error("No meetings found for consultant ID:", consultantId);
+    isSlotAvailable = false;
+    console.log("isSlotAvailable:", isSlotAvailable);
+}
+
+if (!meetings[consultantId][date]) {
+    console.error("No meetings found for the specified date:", date);
+    isSlotAvailable = false;
+    console.log("isSlotAvailable:", isSlotAvailable);
+}
+
+if (!meetings[consultantId][date].length) {
+    console.error("No available slots found for the specified date:", date);
+    isSlotAvailable = false;
+    console.log("isSlotAvailable:", isSlotAvailable);
+}
+
+if (meetings && meetings[consultantId] && meetings[consultantId][date] && meetings[consultantId][date].length > 0) {
     const availableSlots = meetings[consultantId][date];
-    isSlotAvailable = availableSlots.some(slot =>
-        (startTime < slot.end && endTime > slot.start)
-    );
+    console.log("Available slots:", availableSlots);
+     
+   const formattedStartTime = startTime + ":00"; // הוספת שניות
+const formattedEndTime = endTime + ":00"; // הוספת שניות
+
+isSlotAvailable = availableSlots.every(slot => {
+    const isAvailable = (formattedStartTime >= slot.start && formattedEndTime <= slot.end);
+    console.log(`Checking slot: ${JSON.stringify(slot)} - Is available: ${isAvailable}  end: ${formattedEndTime} start: ${formattedStartTime}`);
+    return isAvailable;
+});
+
+console.log("Is the requested time slot available?", isSlotAvailable);
+
 
     console.log("Is the requested time slot available?", isSlotAvailable);
 } else {
@@ -145,30 +190,82 @@ const getConsultantsByService = async (serviceId) => {
 
 
 // פונקציות לקבלת שעות עסקים ופגישות
+// const getBusinessHours = async (businessConsultantId, formattedDate) => {
+//     console.log("Getting business hours for consultant ID:", businessConsultantId, "on date:", formattedDate);
+//     let formattedBusinessHours = [];
+//     try {
+//     // const businessHours = await BusinessHours.findAll({
+//     //     where:{
+//     //         business_consultant_id: businessConsultantId,
+//     //         date: formattedDate,
+//     //         is_active: true
+//     //     }
+//     // });
+
+//    const businessHours = await BusinessHours.findAll({
+//     where: {
+//         business_consultant_id: businessConsultantId,
+//         date: formattedDate,
+//         is_active: true
+//     }
+//     });
+
+//     // המרה של start_time ו-end_time לאחר קבלת התוצאות
+//     formattedBusinessHours = businessHours.map(hour => ({
+//         id: hour.id,
+//         business_consultant_id: hour.business_consultant_id,
+//         date: hour.date,
+//         start_time: hour.start_time.toISOString().substr(11, 8), // חיתוך השעה
+//         end_time: hour.end_time.toISOString().substr(11, 8), // חיתוך השעה
+//         is_active: hour.is_active
+//     }));
+
+//     formattedBusinessHours.forEach(hour => {
+        
+//         console.log("/////////////////////", JSON.stringify(hour, null, 2)); // המרה ל-JSON
+//     });
+// } catch (error) {
+//     console.error('Error fetching business hours:', error);
+// }
+
+//     return await formattedBusinessHours.findAll({
+//         where: {
+//             business_consultant_id: businessConsultantId,
+//             date: formattedDate,
+//             is_active: true
+//         }
+//     });
+// };
 const getBusinessHours = async (businessConsultantId, formattedDate) => {
     console.log("Getting business hours for consultant ID:", businessConsultantId, "on date:", formattedDate);
-try {
-    const businessHours = await BusinessHours.findAll({
-        where:{
-            business_consultant_id: businessConsultantId,
-            date: formattedDate,
-            is_active: true
-        }
-    });
-    businessHours.forEach(hour => {
-        console.log(hour.toJSON()); // או hour.dataValues
-    });
-} catch (error) {
-    console.error('Error fetching business hours:', error);
-}
+    let formattedBusinessHours = [];
+    try {
+        const businessHours = await BusinessHours.findAll({
+            where: {
+                business_consultant_id: businessConsultantId,
+                date: formattedDate,
+                is_active: true
+            }
+        });
 
-    return await BusinessHours.findAll({
-        where: {
-            business_consultant_id: businessConsultantId,
-            date: formattedDate,
-            is_active: true
-        }
-    });
+        // המרה של start_time ו-end_time לאחר קבלת התוצאות
+        formattedBusinessHours = businessHours.map(hour => ({
+            id: hour.id,
+            business_consultant_id: hour.business_consultant_id,
+            date: hour.date,
+            start_time: hour.start_time.toISOString().substr(11, 8), // חיתוך השעה
+            end_time: hour.end_time.toISOString().substr(11, 8), // חיתוך השעה
+            is_active: hour.is_active
+        }));
+
+        formattedBusinessHours.forEach(hour => {
+            console.log("/////////////////////", JSON.stringify(hour, null, 2)); // המרה ל-JSON
+        });
+    } catch (error) {
+        console.error('Error fetching business hours:', error);
+    }
+
+    return formattedBusinessHours; // החזר את המערך המפורמט
 };
 
 
@@ -263,11 +360,11 @@ const getAvailableTimes = async (dates, businessConsultantIds) => {
 
         for (const date of dates) {
             const dateObject = new Date(date);
-            const formattedDate = dateObject.toISOString();
+            const formattedDate = dateObject.toISOString().split('T')[0];
             console.log(`Processing date: ${formattedDate} for consultant ID: ${businessConsultantId} type of date: ${typeof formattedDate}`);
-            const businessHours = await getBusinessHours(businessConsultantId, formattedDate);
+            const businessHours = await getBusinessHours(businessConsultantId, dateObject);
             console.log(`Business hours for ${formattedDate}:`, businessHours);
-            const bookedMeetings = await getBookedMeetings(formattedDate, businessHours);
+            const bookedMeetings = await getBookedMeetings(dateObject, businessHours);
             console.log(`Booked meetings for ${formattedDate}:`, bookedMeetings);
             const bookedTimes = bookedMeetings.map(meeting => ({
                 start: meeting.start_time,
